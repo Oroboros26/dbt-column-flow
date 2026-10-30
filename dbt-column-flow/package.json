@@ -1,0 +1,191 @@
+{
+  "name": "voro-column-flow",
+  "displayName": "VORO Column Flow",
+  "description": "Column-level lineage visualization for dbt projects — reads manifest.json, no setup required",
+  "version": "0.3.3",
+  "publisher": "sahbimo",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Oroboros26/dbt-column-flow"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Visualization", "Data Science"],
+  "keywords": ["dbt", "lineage", "column-level", "data", "analytics", "dag", "voro"],
+  "activationEvents": [
+    "workspaceContains:**/dbt_project.yml"
+  ],
+  "main": "./dist/extension.js",
+  "icon": "media/icon.png",
+  "contributes": {
+    "commands": [
+      {
+        "command": "voroColumnFlow.showLineage",
+        "title": "VORO Column Flow: Show Lineage",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "voroColumnFlow.showLineageForModel",
+        "title": "VORO Column Flow: Show Lineage for Current Model"
+      },
+      {
+        "command": "voroColumnFlow.refresh",
+        "title": "VORO Column Flow: Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "voroColumnFlow.exportPng",
+        "title": "VORO Column Flow: Export as PNG"
+      },
+      {
+        "command": "voroColumnFlow.switchProject",
+        "title": "VORO Column Flow: Switch dbt Project"
+      },
+      {
+        "command": "voroColumnFlow.showWelcome",
+        "title": "VORO Column Flow: Show Welcome Banner"
+      },
+      {
+        "command": "voroColumnFlow.setAiApiKey",
+        "title": "VORO Column Flow: Set AI API Key"
+      },
+      {
+        "command": "voroColumnFlow.clearAiApiKey",
+        "title": "VORO Column Flow: Clear AI API Key"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "voroColumnFlow",
+          "title": "VORO Column Flow",
+          "icon": "media/sidebar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "voroColumnFlow": [
+        {
+          "id": "voroColumnFlow.modelsTree",
+          "name": "Models",
+          "type": "tree"
+        }
+      ]
+    },
+    "menus": {
+      "editor/title": [
+        {
+          "command": "voroColumnFlow.showLineageForModel",
+          "when": "resourceExtname == .sql",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "voroColumnFlow.showLineageForModel",
+          "when": "resourceExtname == .sql",
+          "group": "navigation@100"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "voroColumnFlow.showLineageForModel",
+          "when": "resourceExtname == .sql"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "voroColumnFlow.refresh",
+          "when": "view == voroColumnFlow.modelsTree",
+          "group": "navigation"
+        },
+        {
+          "command": "voroColumnFlow.showLineage",
+          "when": "view == voroColumnFlow.modelsTree",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "VORO Column Flow",
+      "properties": {
+        "voroColumnFlow.targetPath": {
+          "type": "string",
+          "default": "target",
+          "description": "Relative path to the dbt target directory (contains manifest.json)"
+        },
+        "voroColumnFlow.welcomeBanner": {
+          "type": "string",
+          "enum": ["onInstall", "always", "never"],
+          "default": "onInstall",
+          "enumDescriptions": [
+            "Show once per installed version",
+            "Show every time the extension activates",
+            "Never show automatically"
+          ],
+          "description": "When to open the VORO welcome banner terminal on activation"
+        },
+        "voroColumnFlow.ai.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Off by default. When on, a 'Resolve with AI' button appears on edges the SQL parser could not resolve. Clicking it sends that edge's model/column names and the target model's SQL to the endpoint configured below — nothing else, and only when clicked."
+        },
+        "voroColumnFlow.ai.apiFormat": {
+          "type": "string",
+          "enum": ["openai", "anthropic", "azure"],
+          "default": "openai",
+          "enumDescriptions": [
+            "OpenAI-compatible chat completions API — also covers OpenRouter, Groq, Mistral, DeepSeek, Together, Ollama, LM Studio, and most self-hosted servers",
+            "Anthropic Messages API",
+            "Azure AI Foundry model-catalog / serverless deployment (a *.services.ai.azure.com or *.models.ai.azure.com endpoint). Not a classic *.openai.azure.com resource — that uses a different auth/URL shape and isn't supported"
+          ],
+          "description": "Wire format of the endpoint below"
+        },
+        "voroColumnFlow.ai.baseUrl": {
+          "type": "string",
+          "default": "https://api.openai.com/v1",
+          "description": "Base URL of the AI endpoint, e.g. https://api.openai.com/v1, https://api.anthropic.com, https://<name>.services.ai.azure.com, or a local server such as http://localhost:11434/v1"
+        },
+        "voroColumnFlow.ai.model": {
+          "type": "string",
+          "default": "",
+          "description": "Model name to request, e.g. gpt-4o-mini, claude-haiku-4-5, llama3.1 — for Azure, this is your deployment name"
+        },
+        "voroColumnFlow.ai.azureApiVersion": {
+          "type": "string",
+          "default": "2024-05-01-preview",
+          "description": "Only used when apiFormat is 'azure'. The api-version query param the Azure AI Model Inference API expects — check your Azure AI Foundry deployment's docs/quickstart code sample for the current value, this default may be outdated"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "package": "vsce package",
+    "publish": "vsce publish",
+    "lint": "eslint src/ webview-ui/src/",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/dagre": "^0.7.54",
+    "@types/node": "^20.11.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^2.24.0",
+    "esbuild": "^0.20.0",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0"
+  },
+  "dependencies": {
+    "@xyflow/react": "^12.3.0",
+    "dagre": "^0.8.5",
+    "node-sql-parser": "^5.3.2",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0"
+  }
+}

@@ -1,0 +1,16 @@
+.vscode/**
+.github/**
+node_modules/**
+src/**
+webview-ui/**
+**/*.ts
+dist/**/*.map
+esbuild.mjs
+tsconfig.json
+.eslintrc*
+.gitignore
+vitest.config.ts
+**/*.test.ts
+
+sample-project/**
+preview/**

@@ -1,0 +1,15 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      // Not named "npm: build" — that collides with VS Code's auto-detected task
+      // for the `build` script in package.json, which blocks the launch.
+      "label": "build-extension",
+      "type": "shell",
+      "command": "node esbuild.mjs",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": [],
+      "presentation": { "reveal": "silent" }
+    }
+  ]
+}

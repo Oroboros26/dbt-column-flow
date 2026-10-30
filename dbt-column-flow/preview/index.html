@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>dbt Column Flow — Preview</title>
+  <style>
+    :root {
+      --vscode-editor-background: #1e1e1e;
+      --vscode-editor-foreground: #d4d4d4;
+      --vscode-font-family: 'Segoe UI', system-ui, sans-serif;
+      --vscode-editor-font-family: 'Cascadia Code', 'Fira Code', monospace;
+      --vscode-font-size: 13px;
+      --vscode-panel-border: #333;
+      --vscode-button-background: #0e639c;
+      --vscode-button-foreground: #fff;
+      --vscode-button-secondaryBackground: #3a3d41;
+      --vscode-button-secondaryForeground: #d4d4d4;
+      --vscode-button-border: transparent;
+      --vscode-button-secondaryHoverBackground: #45494e;
+      --vscode-input-background: #3c3c3c;
+      --vscode-input-foreground: #d4d4d4;
+      --vscode-input-border: #555;
+      --vscode-focusBorder: #007fd4;
+      --vscode-descriptionForeground: #9d9d9d;
+      --vscode-editorHoverWidget-background: #252526;
+      --vscode-editorHoverWidget-border: #454545;
+      --vscode-editorWidget-background: #252526;
+      --vscode-textCodeBlock-background: #1e1e1e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      background: var(--vscode-editor-background);
+      color: var(--vscode-editor-foreground);
+      font-family: var(--vscode-font-family);
+      font-size: var(--vscode-font-size);
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    #toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-bottom: 1px solid var(--vscode-panel-border);
+      flex-shrink: 0;
+    }
+    #toolbar button {
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+      border: 1px solid var(--vscode-button-border, transparent);
+      border-radius: 3px;
+      padding: 3px 10px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    #toolbar button:hover { background: var(--vscode-button-secondaryHoverBackground); }
+    #toolbar button.active {
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
+    }
+    #toolbar .sep { flex: 1; }
+    #toolbar .stat { font-size: 11px; color: var(--vscode-descriptionForeground); }
+    #search {
+      background: var(--vscode-input-background);
+      color: var(--vscode-input-foreground);
+      border: 1px solid var(--vscode-input-border, transparent);
+      border-radius: 3px;
+      padding: 3px 8px;
+      font-size: 12px;
+      width: 160px;
+    }
+    #search:focus { outline: 1px solid var(--vscode-focusBorder); }
+    #graph-container { flex: 1; position: relative; overflow: hidden; }
+    #graph-container svg { width: 100%; height: 100%; }
+    #state-overlay {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 12px; pointer-events: none;
+    }
+    #state-overlay.hidden { display: none; }
+    #state-overlay .msg {
+      font-size: 13px;
+      color: var(--vscode-descriptionForeground);
+      text-align: center;
+      max-width: 340px;
+      line-height: 1.5;
+    }
+    .tooltip {
+      position: absolute; pointer-events: none;
+      background: var(--vscode-editorHoverWidget-background);
+      border: 1px solid var(--vscode-editorHoverWidget-border);
+      border-radius: 4px; padding: 6px 10px; font-size: 11px;
+      max-width: 240px; z-index: 100; opacity: 0; transition: opacity 0.1s;
+    }
+    .tooltip.visible { opacity: 1; }
+    #legend {
+      position: absolute; bottom: 12px; left: 12px;
+      background: var(--vscode-editorWidget-background);
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 4px; padding: 8px 10px; font-size: 11px;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-dot { width: 10px; height: 3px; border-radius: 2px; }
+    #preview-badge {
+      position: absolute; top: 8px; right: 8px;
+      background: #0e639c; color: #fff;
+      font-size: 10px; padding: 2px 8px; border-radius: 10px;
+      letter-spacing: 0.5px;
+    }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <button id="btn-all" class="active">All</button>
+    <button id="btn-up">Upstream</button>
+    <button id="btn-down">Downstream</button>
+    <input id="search" type="text" placeholder="Search model…" />
+    <span class="sep"></span>
+    <span class="stat" id="stat-text"></span>
+    <button id="btn-fit">Fit</button>
+    <button id="btn-export">Export</button>
+  </div>
+  <div id="graph-container">
+    <svg id="graph-svg"></svg>
+    <div id="state-overlay">
+      <div class="msg" id="state-msg">Loading…</div>
+    </div>
+    <div class="tooltip" id="tooltip"></div>
+    <div id="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#0066ff"></div>Passthrough</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#00cc66"></div>Rename</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ffaa00"></div>Transform</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#9933ff"></div>Aggregate</div>
+    </div>
+    <div id="preview-badge">BROWSER PREVIEW</div>
+  </div>
+
+  <script>
+    // Mock the VS Code webview API so the bundle works in a browser
+    let _messageHandler = null;
+    window.acquireVsCodeApi = () => ({
+      postMessage: (msg) => {
+        if (msg.type === 'ready') {
+          // Send sample graph once webview signals ready
+          setTimeout(() => sendSampleGraph(), 100);
+        }
+        if (msg.type === 'openFile') {
+          alert('Would open: ' + msg.filePath);
+        }
+      },
+      getState: () => ({}),
+      setState: () => {},
+    });
+
+    // Intercept window.addEventListener('message', ...) — this is how the bundle listens
+    const _origAddEventListener = window.addEventListener.bind(window);
+    window.addEventListener = function(type, handler, ...rest) {
+      if (type === 'message') {
+        _messageHandler = handler;
+      }
+      return _origAddEventListener(type, handler, ...rest);
+    };
+
+    function dispatch(data) {
+      if (_messageHandler) _messageHandler({ data });
+    }
+
+    // ── Sample dbt lineage graph ───────────────────────────────────────────────
+    const SAMPLE_GRAPH = {
+      models: [
+        {
+          id: 'source.jaffle_shop.raw.raw_orders',
+          name: 'raw_orders',
+          resourceType: 'source',
+          database: 'analytics',
+          schema: 'raw',
+          filePath: null,
+          materialization: 'table',
+          description: 'Raw orders from the transactional DB',
+          parseStatus: 'parsed',
+          layer: 'source',
+          columns: [
+            { id: 'source.jaffle_shop.raw.raw_orders::id', name: 'id', dataType: 'INTEGER', description: 'Order PK' },
+            { id: 'source.jaffle_shop.raw.raw_orders::user_id', name: 'user_id', dataType: 'INTEGER', description: '' },
+            { id: 'source.jaffle_shop.raw.raw_orders::amount', name: 'amount', dataType: 'NUMERIC', description: '' },
+            { id: 'source.jaffle_shop.raw.raw_orders::status', name: 'status', dataType: 'VARCHAR', description: '' },
+            { id: 'source.jaffle_shop.raw.raw_orders::created_at', name: 'created_at', dataType: 'TIMESTAMP', description: '' },
+          ],
+        },
+        {
+          id: 'source.jaffle_shop.raw.raw_customers',
+          name: 'raw_customers',
+          resourceType: 'source',
+          database: 'analytics',
+          schema: 'raw',
+          filePath: null,
+          materialization: 'table',
+          description: 'Raw customer records',
+          parseStatus: 'parsed',
+          layer: 'source',
+          columns: [
+            { id: 'source.jaffle_shop.raw.raw_customers::id', name: 'id', dataType: 'INTEGER', description: '' },
+            { id: 'source.jaffle_shop.raw.raw_customers::first_name', name: 'first_name', dataType: 'VARCHAR', description: '' },
+            { id: 'source.jaffle_shop.raw.raw_customers::last_name', name: 'last_name', dataType: 'VARCHAR', description: '' },
+            { id: 'source.jaffle_shop.raw.raw_customers::email', name: 'email', dataType: 'VARCHAR', description: '' },
+          ],
+        },
+        {
+          id: 'model.jaffle_shop.stg_orders',
+          name: 'stg_orders',
+          resourceType: 'model',
+          database: 'analytics',
+          schema: 'dbt_staging',
+          filePath: '/path/to/models/staging/stg_orders.sql',
+          materialization: 'view',
+          description: 'Staged orders — cast and renamed',
+          parseStatus: 'parsed',
+          layer: 'staging',
+          columns: [
+            { id: 'model.jaffle_shop.stg_orders::order_id', name: 'order_id', dataType: 'INTEGER', description: 'Renamed from id' },
+            { id: 'model.jaffle_shop.stg_orders::customer_id', name: 'customer_id', dataType: 'INTEGER', description: 'Renamed from user_id' },
+            { id: 'model.jaffle_shop.stg_orders::order_amount', name: 'order_amount', dataType: 'NUMERIC', description: 'Amount in USD' },
+            { id: 'model.jaffle_shop.stg_orders::order_status', name: 'order_status', dataType: 'VARCHAR', description: '' },
+            { id: 'model.jaffle_shop.stg_orders::ordered_at', name: 'ordered_at', dataType: 'TIMESTAMP', description: '' },
+          ],
+        },
+        {
+          id: 'model.jaffle_shop.stg_customers',
+          name: 'stg_customers',
+          resourceType: 'model',
+          database: 'analytics',
+          schema: 'dbt_staging',
+          filePath: '/path/to/models/staging/stg_customers.sql',
+          materialization: 'view',
+          description: 'Staged customers',
+          parseStatus: 'parsed',
+          layer: 'staging',
+          columns: [
+            { id: 'model.jaffle_shop.stg_customers::customer_id', name: 'customer_id', dataType: 'INTEGER', description: '' },
+            { id: 'model.jaffle_shop.stg_customers::full_name', name: 'full_name', dataType: 'VARCHAR', description: 'Concat of first + last' },
+            { id: 'model.jaffle_shop.stg_customers::email', name: 'email', dataType: 'VARCHAR', description: '' },
+          ],
+        },
+        {
+          id: 'model.jaffle_shop.dim_customers',
+          name: 'dim_customers',
+          resourceType: 'model',
+          database: 'analytics',
+          schema: 'dbt_marts',
+          filePath: '/path/to/models/marts/dim_customers.sql',
+          materialization: 'table',
+          description: 'Customer dimension with lifetime metrics',
+          parseStatus: 'parsed',
+          layer: 'marts',
+          columns: [
+            { id: 'model.jaffle_shop.dim_customers::customer_id', name: 'customer_id', dataType: 'INTEGER', description: '' },
+            { id: 'model.jaffle_shop.dim_customers::full_name', name: 'full_name', dataType: 'VARCHAR', description: '' },
+            { id: 'model.jaffle_shop.dim_customers::email', name: 'email', dataType: 'VARCHAR', description: '' },
+            { id: 'model.jaffle_shop.dim_customers::total_orders', name: 'total_orders', dataType: 'INTEGER', description: 'COUNT of orders' },
+            { id: 'model.jaffle_shop.dim_customers::total_spent', name: 'total_spent', dataType: 'NUMERIC', description: 'SUM of order amounts' },
+          ],
+        },
+        {
+          id: 'model.jaffle_shop.fct_orders',
+          name: 'fct_orders',
+          resourceType: 'model',
+          database: 'analytics',
+          schema: 'dbt_marts',
+          filePath: '/path/to/models/marts/fct_orders.sql',
+          materialization: 'table',
+          description: 'Orders fact table',
+          parseStatus: 'parsed',
+          layer: 'marts',
+          columns: [
+            { id: 'model.jaffle_shop.fct_orders::order_id', name: 'order_id', dataType: 'INTEGER', description: '' },
+            { id: 'model.jaffle_shop.fct_orders::customer_id', name: 'customer_id', dataType: 'INTEGER', description: '' },
+            { id: 'model.jaffle_shop.fct_orders::order_amount', name: 'order_amount', dataType: 'NUMERIC', description: '' },
+            { id: 'model.jaffle_shop.fct_orders::order_status', name: 'order_status', dataType: 'VARCHAR', description: '' },
+            { id: 'model.jaffle_shop.fct_orders::is_completed', name: 'is_completed', dataType: 'BOOLEAN', description: 'CASE on status' },
+            { id: 'model.jaffle_shop.fct_orders::ordered_at', name: 'ordered_at', dataType: 'TIMESTAMP', description: '' },
+          ],
+        },
+      ],
+
+      modelEdges: [
+        { sourceModelId: 'source.jaffle_shop.raw.raw_orders', targetModelId: 'model.jaffle_shop.stg_orders' },
+        { sourceModelId: 'source.jaffle_shop.raw.raw_customers', targetModelId: 'model.jaffle_shop.stg_customers' },
+        { sourceModelId: 'model.jaffle_shop.stg_customers', targetModelId: 'model.jaffle_shop.dim_customers' },
+        { sourceModelId: 'model.jaffle_shop.stg_orders', targetModelId: 'model.jaffle_shop.dim_customers' },
+        { sourceModelId: 'model.jaffle_shop.stg_orders', targetModelId: 'model.jaffle_shop.fct_orders' },
+        { sourceModelId: 'model.jaffle_shop.dim_customers', targetModelId: 'model.jaffle_shop.fct_orders' },
+      ],
+
+      columnEdges: [
+        // raw_orders → stg_orders
+        { id: 'e1', sourceModelId: 'source.jaffle_shop.raw.raw_orders', sourceColumnId: 'source.jaffle_shop.raw.raw_orders::id', targetModelId: 'model.jaffle_shop.stg_orders', targetColumnId: 'model.jaffle_shop.stg_orders::order_id', transformationType: 'rename' },
+        { id: 'e2', sourceModelId: 'source.jaffle_shop.raw.raw_orders', sourceColumnId: 'source.jaffle_shop.raw.raw_orders::user_id', targetModelId: 'model.jaffle_shop.stg_orders', targetColumnId: 'model.jaffle_shop.stg_orders::customer_id', transformationType: 'rename' },
+        { id: 'e3', sourceModelId: 'source.jaffle_shop.raw.raw_orders', sourceColumnId: 'source.jaffle_shop.raw.raw_orders::amount', targetModelId: 'model.jaffle_shop.stg_orders', targetColumnId: 'model.jaffle_shop.stg_orders::order_amount', transformationType: 'passthrough' },
+        { id: 'e4', sourceModelId: 'source.jaffle_shop.raw.raw_orders', sourceColumnId: 'source.jaffle_shop.raw.raw_orders::status', targetModelId: 'model.jaffle_shop.stg_orders', targetColumnId: 'model.jaffle_shop.stg_orders::order_status', transformationType: 'passthrough' },
+        { id: 'e5', sourceModelId: 'source.jaffle_shop.raw.raw_orders', sourceColumnId: 'source.jaffle_shop.raw.raw_orders::created_at', targetModelId: 'model.jaffle_shop.stg_orders', targetColumnId: 'model.jaffle_shop.stg_orders::ordered_at', transformationType: 'rename' },
+
+        // raw_customers → stg_customers
+        { id: 'e6', sourceModelId: 'source.jaffle_shop.raw.raw_customers', sourceColumnId: 'source.jaffle_shop.raw.raw_customers::id', targetModelId: 'model.jaffle_shop.stg_customers', targetColumnId: 'model.jaffle_shop.stg_customers::customer_id', transformationType: 'rename' },
+        { id: 'e7', sourceModelId: 'source.jaffle_shop.raw.raw_customers', sourceColumnId: 'source.jaffle_shop.raw.raw_customers::first_name', targetModelId: 'model.jaffle_shop.stg_customers', targetColumnId: 'model.jaffle_shop.stg_customers::full_name', transformationType: 'transform' },
+        { id: 'e8', sourceModelId: 'source.jaffle_shop.raw.raw_customers', sourceColumnId: 'source.jaffle_shop.raw.raw_customers::last_name', targetModelId: 'model.jaffle_shop.stg_customers', targetColumnId: 'model.jaffle_shop.stg_customers::full_name', transformationType: 'transform' },
+        { id: 'e9', sourceModelId: 'source.jaffle_shop.raw.raw_customers', sourceColumnId: 'source.jaffle_shop.raw.raw_customers::email', targetModelId: 'model.jaffle_shop.stg_customers', targetColumnId: 'model.jaffle_shop.stg_customers::email', transformationType: 'passthrough' },
+
+        // stg_customers → dim_customers
+        { id: 'e10', sourceModelId: 'model.jaffle_shop.stg_customers', sourceColumnId: 'model.jaffle_shop.stg_customers::customer_id', targetModelId: 'model.jaffle_shop.dim_customers', targetColumnId: 'model.jaffle_shop.dim_customers::customer_id', transformationType: 'passthrough' },
+        { id: 'e11', sourceModelId: 'model.jaffle_shop.stg_customers', sourceColumnId: 'model.jaffle_shop.stg_customers::full_name', targetModelId: 'model.jaffle_shop.dim_customers', targetColumnId: 'model.jaffle_shop.dim_customers::full_name', transformationType: 'passthrough' },
+        { id: 'e12', sourceModelId: 'model.jaffle_shop.stg_customers', sourceColumnId: 'model.jaffle_shop.stg_customers::email', targetModelId: 'model.jaffle_shop.dim_customers', targetColumnId: 'model.jaffle_shop.dim_customers::email', transformationType: 'passthrough' },
+
+        // stg_orders → dim_customers (aggregates)
+        { id: 'e13', sourceModelId: 'model.jaffle_shop.stg_orders', sourceColumnId: 'model.jaffle_shop.stg_orders::order_id', targetModelId: 'model.jaffle_shop.dim_customers', targetColumnId: 'model.jaffle_shop.dim_customers::total_orders', transformationType: 'aggregate' },
+        { id: 'e14', sourceModelId: 'model.jaffle_shop.stg_orders', sourceColumnId: 'model.jaffle_shop.stg_orders::order_amount', targetModelId: 'model.jaffle_shop.dim_customers', targetColumnId: 'model.jaffle_shop.dim_customers::total_spent', transformationType: 'aggregate' },
+
+        // stg_orders → fct_orders
+        { id: 'e15', sourceModelId: 'model.jaffle_shop.stg_orders', sourceColumnId: 'model.jaffle_shop.stg_orders::order_id', targetModelId: 'model.jaffle_shop.fct_orders', targetColumnId: 'model.jaffle_shop.fct_orders::order_id', transformationType: 'passthrough' },
+        { id: 'e16', sourceModelId: 'model.jaffle_shop.stg_orders', sourceColumnId: 'model.jaffle_shop.stg_orders::customer_id', targetModelId: 'model.jaffle_shop.fct_orders', targetColumnId: 'model.jaffle_shop.fct_orders::customer_id', transformationType: 'passthrough' },
+        { id: 'e17', sourceModelId: 'model.jaffle_shop.stg_orders', sourceColumnId: 'model.jaffle_shop.stg_orders::order_amount', targetModelId: 'model.jaffle_shop.fct_orders', targetColumnId: 'model.jaffle_shop.fct_orders::order_amount', transformationType: 'passthrough' },
+        { id: 'e18', sourceModelId: 'model.jaffle_shop.stg_orders', sourceColumnId: 'model.jaffle_shop.stg_orders::order_status', targetModelId: 'model.jaffle_shop.fct_orders', targetColumnId: 'model.jaffle_shop.fct_orders::order_status', transformationType: 'passthrough' },
+        { id: 'e19', sourceModelId: 'model.jaffle_shop.stg_orders', sourceColumnId: 'model.jaffle_shop.stg_orders::order_status', targetModelId: 'model.jaffle_shop.fct_orders', targetColumnId: 'model.jaffle_shop.fct_orders::is_completed', transformationType: 'transform' },
+        { id: 'e20', sourceModelId: 'model.jaffle_shop.stg_orders', sourceColumnId: 'model.jaffle_shop.stg_orders::ordered_at', targetModelId: 'model.jaffle_shop.fct_orders', targetColumnId: 'model.jaffle_shop.fct_orders::ordered_at', transformationType: 'passthrough' },
+
+        // dim_customers → fct_orders
+        { id: 'e21', sourceModelId: 'model.jaffle_shop.dim_customers', sourceColumnId: 'model.jaffle_shop.dim_customers::customer_id', targetModelId: 'model.jaffle_shop.fct_orders', targetColumnId: 'model.jaffle_shop.fct_orders::customer_id', transformationType: 'passthrough' },
+      ],
+
+      metadata: {
+        totalModels: 6,
+        totalColumns: 23,
+        totalEdges: 21,
+        parseSuccessRate: 100,
+      },
+    };
+
+    function sendSampleGraph() {
+      dispatch({ type: 'setGraph', graph: SAMPLE_GRAPH });
+    }
+  </script>
+
+  <!-- Built webview bundle -->
+  <script src="../dist/webview/webview.js"></script>
+</body>
+</html>

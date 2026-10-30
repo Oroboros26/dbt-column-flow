@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <!-- Activity bar icons are rendered through a CSS mask, so only the filled
+       geometry survives — the V is a filled path, not a stroke. -->
+  <path d="M4.5 4.5 L8.2 4.5 L12 13.7 L15.8 4.5 L19.5 4.5 L13.6 19.5 L10.4 19.5 Z" fill="currentColor"/>
+</svg>
