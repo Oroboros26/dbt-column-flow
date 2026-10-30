@@ -28,6 +28,44 @@ colour-coded by how it was transformed along the way.
 Everything is parsed **locally** from files dbt already generates — no data
 ever leaves your machine.
 
+## How it works
+
+```mermaid
+flowchart LR
+    A[dbt artifacts<br/>manifest.json + catalog.json] --> B[artifacts/<br/>locator, parsers, watcher]
+    B --> C[lineage/<br/>sqlParser + jinjaCleaner]
+    C --> D[columnLineageBuilder]
+    L[Optional AI fallback<br/>llmResolver, off by default] -.-> D
+    D --> E[Webview<br/>React canvas]
+    E --> F[Column lineage graph,<br/>search, PNG export]
+```
+
+Everything runs inside the extension host. The only optional network call is the AI fallback described [below](#ai-fallback-optional).
+
+### What happens when you open a model
+
+```mermaid
+flowchart TD
+    A[You run Show Lineage<br/>command, CodeLens or models tree] --> B[locator.findProject<br/>saved root → workspace root → nested dbt_project.yml]
+    B --> C{manifest.json<br/>found?}
+    C -- no --> C1[Output log: run dbt compile<br/>or dbt docs generate]
+    C -- yes --> D[manifestParser reads manifest.json<br/>catalogParser reads catalog.json if present]
+    D --> E[ColumnLineageBuilder.build<br/>SQL dialect taken from the dbt adapter]
+    E --> P1[Pass 1: model and column nodes]
+    P1 --> P2[Pass 2: classify each model's columns<br/>voroAnalyzer + node-sql-parser<br/>passthrough, rename, transform, aggregate]
+    P2 --> P3[Pass 2.5: infer columns of upstream<br/>models that have no known schema]
+    P3 --> P4[Pass 3: build column edges<br/>and de-duplicate]
+    P4 --> G[LineageGraph + parse-rate stats]
+    G --> W[Webview draws the graph]
+    W --> U{Edge the parser<br/>could not resolve?}
+    U -- no --> Z[Colour-coded edges with<br/>expression tooltips]
+    U -- yes --> H[Grey dashed edge]
+    H -- AI enabled and you click<br/>Resolve with AI --> AI[llmResolver sends that one edge<br/>to your configured endpoint]
+    AI --> R[Shown as an AI guess,<br/>never as a parsed fact]
+```
+
+The graph is built from files dbt already wrote to disk. Without `catalog.json` the extension infers upstream schemas from SQL, and the output log says how many it had to infer.
+
 ## Installation
 
 **Option 1 — from the Extensions panel (recommended)**
@@ -198,25 +236,20 @@ model-catalog/serverless deployments (a `*.services.ai.azure.com` or
 note this is **not** the same as a classic `*.openai.azure.com` resource, which
 uses a different auth header and URL shape and isn't supported.
 
+### How your API key is handled
+
+- **Storage:** the key goes into VS Code's secret storage (`context.secrets`), which uses your operating system's secure store where available. It is never written to `settings.json`, to workspace files, to this repository, or to the output log.
+- **Set and remove:** run **VORO Column Flow: Set AI API Key** (the input box masks what you type) and **VORO Column Flow: Clear AI API Key** (asks you to confirm before deleting).
+- **Where it goes:** straight from your machine to the `baseUrl` you configured, as an `Authorization: Bearer` header (OpenAI-compatible and Azure formats) or an `x-api-key` header (Anthropic format). There is no intermediate server.
+- **When it is used:** only if `voroColumnFlow.ai.enabled` is on **and** you click **Resolve with AI** on one unresolved edge. Requests time out after 20 seconds.
+- **What is sent with it:** the two model and column names, their data types, the SQL dialect, and the target model's SQL (first 6,000 characters). No data rows are sent, because the extension never connects to your warehouse.
+- **Keeping everything local:** point `baseUrl` at a local OpenAI-compatible server such as Ollama or LM Studio and nothing leaves your machine.
+
 ## Privacy
 
 Everything else is parsed locally from files already on disk. Aside from the
 opt-in AI fallback above (off by default), the extension makes no network calls
 and never connects to your warehouse.
-
-## How it works
-
-```mermaid
-flowchart LR
-    A[dbt artifacts<br/>manifest.json + catalog.json] --> B[artifacts/<br/>locator, parsers, watcher]
-    B --> C[lineage/<br/>sqlParser + jinjaCleaner]
-    C --> D[columnLineageBuilder]
-    L[Optional AI fallback<br/>llmResolver, off by default] -.-> D
-    D --> E[Webview<br/>React canvas]
-    E --> F[Column lineage graph,<br/>search, PNG export]
-```
-
-Everything runs inside the extension host. The only optional network call is the AI fallback described below.
 
 ## Build from source
 
